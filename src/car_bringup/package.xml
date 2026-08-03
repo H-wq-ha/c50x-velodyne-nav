@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>car_bringup</name>
+  <version>0.0.1</version>
+  <description>WHEELTEC C50X chassis ROS2 driver</description>
+  <maintainer email="zzu@todo.com">zzu</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

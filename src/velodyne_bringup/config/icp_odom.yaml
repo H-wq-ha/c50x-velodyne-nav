@@ -1,0 +1,21 @@
+icp_odometry:
+  ros__parameters:
+    frame_id: base_link
+    odom_frame_id: odom
+    publish_tf: true             # icp_odometry直接发布odom→base_link
+    expected_update_rate: 15.0
+    Icp/PointToPlane: "true"
+    Icp/Iterations: "10"
+    Icp/VoxelSize: "0.1"
+    Icp/Epsilon: "0.001"
+    Icp/PointToPlaneK: "20"
+    Icp/PointToPlaneRadius: "0"
+    Icp/MaxTranslation: "3"
+    Icp/MaxCorrespondenceDistance: "1.0"
+    Icp/Strategy: "1"
+    Icp/OutlierRatio: "0.7"
+    Odom/ScanKeyFrameThr: "0.4"
+    OdomF2M/ScanSubtractRadius: "0.1"
+    OdomF2M/ScanMaxSize: "15000"
+    OdomF2M/BundleAdjustment: "false"
+    Icp/CorrespondenceRatio: "0.01"

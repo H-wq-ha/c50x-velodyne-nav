@@ -1,0 +1,25 @@
+# ===== 构建产物 =====
+build/
+install/
+log/
+
+# ===== 文档（不入库）=====
+docs/
+
+# ===== 地图数据（仅保留目录结构，地图文件不入库）=====
+maps/*
+!maps/.gitkeep
+
+# ===== Python =====
+__pycache__/
+*.pyc
+
+# ===== AI 工具本地状态 =====
+.claude/
+.agents/
+.codex/
+
+# ===== 编辑器/系统 =====
+.vscode/
+.idea/
+*.swp
