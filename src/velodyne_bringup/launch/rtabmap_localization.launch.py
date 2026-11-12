@@ -1,7 +1,7 @@
 """VLP-16 + WHEELTEC C50X RTAB-Map localization for Nav2.
 
 Use this after a map/database has been saved with scripts/save_rtabmap_map.sh.
-RTAB-Map localization loads maps/rtabmap_nav2_latest.db by default.
+RTAB-Map localization loads maps/latest/rtabmap.db by default.
 """
 
 import os
@@ -22,7 +22,7 @@ def generate_launch_description():
     default_database = os.path.join(
         os.path.expanduser('~'),
         'arm_car', 'lidar', 'maps',
-        'rtabmap_nav2_latest.db')
+        'latest', 'rtabmap.db')
 
     velodyne_driver = Node(
         package='velodyne_driver',
@@ -31,6 +31,7 @@ def generate_launch_description():
         output='both',
         parameters=[os.path.join(pkg_velodyne_driver, 'config',
                                  'VLP16-velodyne_driver_node-params.yaml'),
+                    os.path.join(pkg_dir, 'config', 'velodyne_hardware_time.yaml'),
                     {'timestamp_first_packet': True}],
     )
 
@@ -49,8 +50,13 @@ def generate_launch_description():
     static_tf_velodyne = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_tf_base_to_velodyne',
-        arguments=['0', '0', '0.3', '0', '0.0873', '0', 'base_link', 'velodyne'],
+        name='static_tf_imu_to_velodyne',
+        # 雷达原点在 IMU 坐标系中的位置（m）；X/Y 反向、Z 同向，绕 Z 旋转 pi。
+        arguments=[
+            '--x', '-0.0718', '--y', '0.006', '--z', '1.0345',
+            '--roll', '0', '--pitch', '0', '--yaw', '3.141592653589793',
+            '--frame-id', 'imu_link', '--child-frame-id', 'velodyne',
+        ],
     )
 
     static_tf_imu = Node(

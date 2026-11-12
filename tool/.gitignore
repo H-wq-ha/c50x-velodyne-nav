@@ -1,0 +1,8 @@
+calibration_ws/
+runs/
+__pycache__/
+oa_licalib_ws/
+oa_licalib_deps/
+oa_licalib_venv/
+oa_build_ceres/
+oa_build_pangolin/

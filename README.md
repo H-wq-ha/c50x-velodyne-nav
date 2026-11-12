@@ -1,218 +1,161 @@
-# WHEELTEC C50X + VLP-16 激光雷达 SLAM 与自主导航
+# WHEELTEC C50X 多传感器建图与语义导航
 
-基于 **ROS2 Humble** 的三维激光雷达建图与自主导航工程：WHEELTEC C50X 差速底盘（STM32F407VE 固件）+ Velodyne VLP-16 16 线雷达，使用 RTAB-Map 完成 3D LiDAR SLAM / 定位，Nav2 完成自主导航，并提供 AMCL 备选定位方案。
+基于 **ROS 2 Humble、VLP-16、底盘 IMU 和 RealSense D435i** 的实车工作区，提供雷达建图、保存地图定位、Nav2 导航，以及按物体类别或实例编号导航的能力。自然语言入口通过独立的 ROSA 项目接入。
 
-仓库同时收录底盘固件源码（`firmware_source_code/`，WHEELTEC 官方 STM32/FreeRTOS 工程，Keil 编译），与上位机 ROS2 代码形成"固件 + 应用"完整技术栈。
+主流程分为两个阶段：先建立几何地图并记录物体位置，再加载同一地图上的物体数据库执行导航。**地图标签保存在 SQLite 中，几何避障由 Nav2 处理。**
 
-## 1. 数据流框架
+本文及配套指南于 **2026-11-12** 根据本副本的源码整理；本次未启动硬件或进行实车验证。当前副本保留源码和模型，不附带已构建环境、历史地图或运行输出，首次使用需要安装依赖、编译，并准备自己的地图。
 
-### 1.1 分层架构
+## 文档入口
 
-系统自上而下分为 7 层，固件与 ROS 之间的唯一边界是串口协议（下行 11B 控制帧，上行 24B 状态帧 @200Hz，帧头 `0x7B`、帧尾 `0x7D`、BCC 异或校验）。
+- [架构与数据流](docs/语义导航数据流架构.md)：模块职责、ROS 话题、地图交接与任务协议。
+- [完整启动指南](docs/启动指南.md)：环境准备、各功能启动、参数和排查方法。
+- [文档索引](docs/README.md)：标定、TF、诊断和实验说明。
+
+## 功能种类
+
+| 类别 | 提供的功能 | 主要入口 / 实现 | 使用前提 |
+|---|---|---|---|
+| 传感器与底盘 | VLP-16 点云、底盘 IMU、速度反馈、电池电压、串口速度控制 | `src/car_bringup/`、`src/velodyne_bringup/` | 实际串口、雷达网络和安装 TF 正确 |
+| 几何建图 | IMU 辅助点云去畸变、ICP 里程计、RTAB-Map 三维建图和二维栅格 | `rtabmap_slam.launch.py` | 雷达与 IMU 数据可用 |
+| 几何定位与导航 | RTAB-Map 或 AMCL 定位，Nav2 规划、局部避障和 RViz 点选目标 | `rtabmap_slam.launch.py localization:=true`、`nav2_bringup.launch.py` | 已保存的配套地图 |
+| 语义建图 | YOLO 检测、深度反投影、采集时刻 TF 变换、同类物体融合和持久化 | `semantic_mapping/one_click.launch.py` | D435i、ONNX 模型、几何建图链 |
+| 物体导航 | 按类别 / 实例选择物体，生成停靠位姿、检查相机视场、预检路径并导航 | `semantic_navigation.launch.py` | 完整语义地图包，含已确认物体 |
+| 自然语言交互 | 查询物体与相对位置、路径预检、创建 / 查询 / 取消导航任务 | 外部 ROSA 的 `rosa_semantic` | 另行安装 ROSA；真实模型请求需自行配置凭据 |
+| 遥控与可视化 | ROS 键盘遥控、独立蓝牙遥控、安装 TF 预览 | `keyboard_teleop`、`tools/` | 与当前运行模式匹配的控制端 |
+| 传感器标定 | OA-LICalib / GRIL-Calib 雷达 IMU 联合标定、IMU 单独内参标定 | `tool/`、`ImuCalibration/` | 独立标定环境及对应固件 / 接线 |
+| 诊断与独立实验 | 话题与时钟检查、录包导航跟踪分析、独立 RGB-D 检测 | `tools/`、`yolov8_d435i/` | 按具体工具准备数据与依赖 |
+
+ROS 语义主链支持 **laptop（63）、bottle（39）、cup（41）**，别名包括“笔记本、瓶子、杯子”。独立 YOLO 实验程序可使用模型中的 80 个 COCO 类别，其输出是相机坐标，不等同于语义地图坐标。
+
+## 架构数据流
 
 ```mermaid
 flowchart TB
-    subgraph L0["L0 硬件物理层"]
-        VLP["VLP-16 激光雷达 · 16线3D · 10Hz · UDP:2368"]
-        CH["C50X 底盘 · STM32F407VE · 4电机+编码器 · IMU"]
-        PC["上位机 · ROS2 Humble"]
-    end
-    subgraph L1["L1 固件控制层 (FreeRTOS)"]
-        BAL["Balance_task 运动控制核心 · 运动学逆解 + PID @100Hz"]
-        DT["data_task 状态帧发送 @200Hz"]
-    end
-    subgraph L2["L2 驱动接入层"]
-        CN["chassis_node (car_bringup) · 串口 460800"]
-        VD["velodyne_driver_node + velodyne_transform_node"]
-    end
-    subgraph L3["L3 感知预处理层"]
-        MF["imu_filter_madgwick → imu_to_tf → lidar_deskewing"]
-    end
-    subgraph L4["L4 里程计与定位层"]
-        ICP["icp_odometry → /odom + odom→base_link"]
-        RT["rtabmap 定位/SLAM 双模式 → map→odom TF"]
-    end
-    subgraph L5["L5 地图与导航决策层"]
-        NAV["Nav2: planner → controller → velocity_smoother"]
-    end
-    subgraph L6["L6 应用交互层"]
-        UI["RViz2 · rtabmap_viz · keyboard_teleop"]
-    end
-    CH <-->|串口| CN
-    VLP -->|UDP| VD
-    CN -->|/imu_raw| MF
-    MF --> L3 --> ICP --> RT
-    RT -->|map→odom| NAV
-    NAV -->|/cmd_vel| CN
-    UI --> NAV
+    L["VLP-16"] --> P["点云转换与去畸变"]
+    I["底盘 IMU → Madgwick"] --> P
+    P --> O["ICP：odom → base_link"]
+    P --> R["RTAB-Map：建图 / 定位"]
+    O --> R
+    C["D435i：彩色图 + 对齐深度 + 内参"] --> Y["YOLO → 深度反投影"]
+    Y --> F["采集时刻 TF → map 坐标 → 实例融合"]
+    R -->|"map → odom"| F
+    O --> F
+    F --> S["semantic.sqlite3"]
+    R --> G["rtabmap.db + 栅格地图"]
+    G --> B["完整语义地图包：阶段间交接"]
+    S --> B
+    B --> N["保存地图定位 + Nav2"]
+    B --> T["semantic_navigator"]
+    U["类别 / 实例指令，或外部 ROSA"] --> T
+    T -->|"候选停靠位姿 / 路径预检"| N
+    P -->|"实时障碍"| N
+    N --> V["速度平滑 → /cmd_vel"]
+    V --> H["底盘串口 → 实车"]
 ```
 
-### 1.2 三条数据流主线
+相机用于物体检测和三维位置估计，默认不参与主线雷达 RTAB-Map 几何建图。`/odom` 来自 ICP；底盘速度反馈 `/chassis_vel` 当前用于监控，没有接入轮速积分或 EKF。详细话题和控制边界见[架构文档](docs/语义导航数据流架构.md)。
 
-| 主线 | 路径 | 方向 |
-|---|---|---|
-| 感知流 | `VLP-16 → /velodyne_packets → /velodyne_points → /velodyne_points/deskewed → {icp_odometry, rtabmap, local_costmap}` | 上行 |
-| 状态流 | `底盘串口 → /imu_raw → /imu/data → base_link_stabilized TF` | 上行 |
-| 控制流 | `导航目标 → Nav2 → cmd_vel_nav → velocity_smoother → /cmd_vel → chassis_node → 串口控制帧 → 电机` | 下行 |
-
-两个闭环：固件内编码器 PID 速度环（100Hz）；ROS 内"点云→ICP→RTAB-Map→costmap→controller"位姿环。
-
-### 1.3 关键话题与 TF
-
-| 话题 | 类型 | 发布者 | 作用 |
-|---|---|---|---|
-| `/velodyne_packets` | Velodyne packet | `velodyne_driver_node` | 原始 UDP 包 |
-| `/velodyne_points` | PointCloud2 | `velodyne_transform_node` | 标定后点云（`min_range=0.5`） |
-| `/velodyne_points/deskewed` | PointCloud2 | `lidar_deskewing` | 运动去畸变点云 |
-| `/imu_raw` | Imu | `chassis_node` | 原始 IMU（无磁力计） |
-| `/imu/data` | Imu | `imu_filter_madgwick` | 滤波后姿态（gain=0.01） |
-| `/odom` | Odometry | `icp_odometry` | ICP 里程计 |
-| `/map` | OccupancyGrid | `rtabmap`（定位/SLAM） | 全局地图 |
-| `/static_map` | OccupancyGrid | `map_server` | 静态地图（RTAB-Map 导航流程，避免与 `/map` 冲突） |
-| `/cmd_vel` | Twist | `velocity_smoother` | 最终底盘速度指令 |
-| `cmd_vel_nav` | Twist | `controller_server` | Nav2 内部未平滑速度 |
-
-TF 树：`map → odom → base_link → {velodyne, imu_link, base_link_stabilized}`
-
-## 2. 操作环境
-
-### 2.1 软件
-
-| 项 | 版本 |
-|---|---|
-| 操作系统 | Ubuntu 22.04.5 LTS（x86_64） |
-| ROS 发行版 | ROS2 Humble |
-| 构建工具 | `colcon` |
-
-### 2.2 硬件
-
-| 设备 | 说明 |
-|---|---|
-| WHEELTEC C50X 底盘 | STM32F407VE 主控，四轮差速，内嵌 IMU（ICM20948/MPU6050），串口 460800 baud；固件源码见 `firmware_source_code/`（FreeRTOS 任务：Balance_task 100Hz PID 速度环、data_task 200Hz 状态帧） |
-| Velodyne VLP-16 | 16 线 3D 雷达，UDP 数据，默认 `192.168.1.201:2368`，600 RPM（10Hz） |
-| 上位机 | 与雷达同一局域网，与底盘通过 USB 串口连接 |
-
-### 2.3 串口设备
-
-- 底盘串口：`/dev/wheeltec_chassis`（460800 baud），需 udev 规则映射；`chassis_node` 参数 `port=auto` 时自动检测
-- 权限：用户需在 `dialout` 组，或配置 udev 规则
-
-### 2.4 网络
-
-雷达驱动从 `192.168.1.201:2368`（UDP）读取数据包，上位机网卡需与雷达处于同一网段（如 `192.168.1.x`）。若收不到数据，日志会出现 `Velodyne poll() timeout`。
-
-## 3. 依赖安装
-
-### 3.1 ROS2 Humble
-
-```bash
-# 安装 ROS2 Humble 基础环境（桌面版）
-# 参考: https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
-sudo apt install ros-humble-desktop python3-colcon-common-extensions
-```
-
-### 3.2 工程依赖包
-
-```bash
-sudo apt install \
-  ros-humble-velodyne-driver ros-humble-velodyne-pointcloud ros-humble-velodyne-laserscan \
-  ros-humble-rtabmap-odom ros-humble-rtabmap-slam ros-humble-rtabmap-util ros-humble-rtabmap-viz \
-  ros-humble-imu-filter-madgwick \
-  ros-humble-nav2-map-server ros-humble-nav2-controller ros-humble-nav2-planner \
-  ros-humble-nav2-behaviors ros-humble-nav2-bt-navigator ros-humble-nav2-lifecycle-manager \
-  ros-humble-nav2-smoother ros-humble-nav2-velocity-smoother ros-humble-nav2-waypoint-follower \
-  ros-humble-nav2-amcl ros-humble-tf2-ros \
-  python3-serial
-```
-
-或在已安装 ROS2 的前提下用 rosdep 自动解析（推荐）：
-
-```bash
-cd ~/arm_car/lidar
-rosdep install --from-paths src -y --ignore-src
-```
-
-### 3.3 编译工程
-
-```bash
-cd ~/arm_car/lidar
-source /opt/ros/humble/setup.bash
-colcon build          # 已安装包可直接运行，无需构建第三方依赖
-source install/setup.bash
-```
-
-> 工程含两个自研包：`car_bringup`（底盘 ROS2 驱动 + 键盘遥控）、`velodyne_bringup`（launch 与参数配置）。第三方包由 apt 提供，本工程不编译它们。
-
-### 3.4 串口 udev 规则（可选）
-
-```bash
-# /etc/udev/rules.d/99-wheeltec.rules
-KERNEL=="ttyACM*", MODE="0666", GROUP="dialout", SYMLINK+="wheeltec_chassis"
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-## 4. 快速开始
-
-标准工作流三步：**建图 → 保存地图 → 定位导航**。
-
-### 4.1 建图（RTAB-Map 3D SLAM）
-
-```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch velodyne_bringup rtabmap_slam.launch.py
-```
-
-启动雷达驱动、底盘、IMU 滤波、去畸变、ICP 里程计和 RTAB-Map 建图。用键盘遥控或手动推车巡游场地：
-
-```bash
-# 另开终端：键盘遥控（W/S 前进后退、A/D 转向、Q/E 调速、空格急停）
-ros2 run car_bringup keyboard_teleop
-```
-
-### 4.2 保存地图
-
-```bash
-./scripts/save_rtabmap_map.sh
-```
-
-自动将当前地图保存为：
+## 目录结构
 
 ```text
-maps/rtabmap_nav2_latest.yaml   # Nav2 静态地图元数据
-maps/rtabmap_nav2_latest.pgm    # Nav2 静态地图图像
-maps/rtabmap_nav2_latest.db     # RTAB-Map 定位数据库
+.
+├── src/
+│   ├── car_bringup/          # 底盘串口、IMU 与 ROS 键盘控制
+│   ├── velodyne_bringup/     # 雷达、ICP、RTAB-Map、Nav2 启动和参数
+│   ├── semantic_mapping/     # RGB-D 语义建图、物体库和任务接口
+│   └── car/                 # 独立串口脚本
+├── scripts/                 # 常用操作脚本
+├── tools/                   # 诊断、分析、蓝牙遥控、TF 预览
+├── tool/                    # 联合标定系统、依赖源码与构建入口
+├── ImuCalibration/          # IMU 内参标定
+├── yolov8_d435i/             # 独立检测实验与模型文件
+├── firmware_source_code/    # 底盘 / STM32 固件源码与工程说明
+├── maps/                    # 用户自己的地图；当前仅保留目录占位
+└── docs/                    # 架构、启动和专题文档
 ```
 
-### 4.3 定位导航（RTAB-Map 定位 + Nav2）
+模型与仿真、ROSA、机械臂位于独立项目，本工作区不包含它们的完整安装环境。
+
+## 环境准备
+
+面向 Ubuntu 22.04、ROS 2 Humble 和系统 Python 3.10。需要已安装 ROS、rosdep 与 colcon；Velodyne、RTAB-Map、Nav2、RealSense ROS 驱动等依赖由包清单和实际驱动环境提供。
+
+在**本仓库根目录**执行：
 
 ```bash
-ros2 launch velodyne_bringup rtabmap_nav_complete.launch.py
+export LIDAR_WS="$(pwd -P)"
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src --ignore-src --rosdistro humble -y
+colcon build --symlink-install \
+  --packages-select car_bringup velodyne_bringup semantic_mapping
+source "$LIDAR_WS/install/setup.bash"
 ```
 
-启动 RTAB-Map 定位（加载 `maps/rtabmap_nav2_latest.db`，自动以 DB 中最后位姿作为初始定位）+ Nav2 导航（加载 `maps/rtabmap_nav2_latest.yaml`）。在 RViz2 中使用 **2D Pose Estimate** 修正初始位姿（若车不在建图结束位置）、**Nav2 Goal** 下发目标点。
+语义建图另需 ONNX Runtime 和 RealSense Python SDK。原虚拟环境已清理，请按[启动指南中的环境准备](docs/启动指南.md#1-环境准备)创建独立环境。不要将 IMU 标定用的 NumPy 2 环境混入 Humble 的 ROS Python 环境。
 
-### 4.4 备选方案：AMCL 定位导航
+## 快速启动语义建图
+
+完成环境准备后，在仓库根目录设置环境路径，并将 `YOUR_D435I_SERIAL` 替换为实际相机序列号：
 
 ```bash
-ros2 launch velodyne_bringup nav2_bringup.launch.py
+export LIDAR_WS="$(pwd -P)"
+source /opt/ros/humble/setup.bash
+source "$LIDAR_WS/install/setup.bash"
+export LIDAR_AI_ENV="$HOME/.venvs/lidar-ai"
+export LIDAR_AI_SITE="$("$LIDAR_AI_ENV/bin/python" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+
+ros2 launch semantic_mapping one_click.launch.py \
+  serial_no:=YOUR_D435I_SERIAL \
+  imu_port:=auto \
+  model_path:="$LIDAR_WS/yolov8_d435i/models/yolov8n_256.onnx" \
+  python_site_packages:="$LIDAR_AI_SITE" \
+  start_rviz:=true
 ```
 
-使用 3D 点云投影 2D 扫描 + AMCL 粒子滤波定位（需要先在 RViz 手动给出初始位姿）。
+该入口包含相机、雷达、只读底盘 IMU、ICP、RTAB-Map、语义建图和健康监控；底盘节点不订阅运动指令。每次创建新的 `map_id`，默认保存到 `~/.ros/semantic_mapping/runs/<map_id>/`，终端会打印实际路径。
 
-### 4.5 运行健康检查
+建图运行目录还需要导出为完整语义地图包，才能用于下一个导航阶段。现有 `scripts/save_rtabmap_map.sh` 只处理几何地图，尚无统一生成完整语义地图包的保存脚本；详见[地图交接要求](docs/启动指南.md#4-语义地图包与物体导航)。
+
+## 启动物体导航
+
+先准备同一地图会话生成的完整 `maps/latest/`，其中需要 `rtabmap.db`、`map.yaml`、`map.pgm`、`semantic.sqlite3`、`run_identity.json` 和 `map_snapshot.json`。当前副本未附带这些文件。
 
 ```bash
-ros2 node list | sort                       # 确认节点齐全
-ros2 topic hz /velodyne_points              # 雷达频率 ~10Hz
-ros2 topic hz /velodyne_points/deskewed     # 去畸变链路
-ros2 topic hz /odom                         # ICP 里程计
-ros2 run tf2_ros tf2_echo map base_link     # TF 链路
+ros2 launch semantic_mapping semantic_navigation.launch.py \
+  maps_root:="$LIDAR_WS/maps" \
+  serial_no:=YOUR_D435I_SERIAL \
+  imu_port:=auto \
+  enable_chassis_control:=true
 ```
 
-导航成功标志（日志）：
+**该命令允许实车接收导航速度。** 启动文件的 `enable_chassis_control` 默认值为 `true`；设为 `false` 会禁用本启动链的底盘速度订阅，并拒绝结构化 `start` 请求，但 Nav2 仍可能生成速度消息。
 
-```text
-controller_server: Reached the goal!
-bt_navigator: Goal succeeded
+另一个已加载同一工作区环境的终端中，发送固定目标：
+
+```bash
+# 同类物体存在多个时，替换为地图中真实的实例编号
+ros2 topic pub --once /semantic_nav/target std_msgs/msg/String "{data: 'bottle:1'}"
+ros2 topic echo /semantic_nav/status
 ```
+
+自然语言查询、预检、任务状态与取消由外部 ROSA 提供，启动方法见[完整启动指南](docs/启动指南.md#6-自然语言接口可选外部项目)。
+
+## 其他启动方法
+
+| 目标 | 启动方式 |
+|---|---|
+| 纯雷达建图、地图导出、AMCL 导航 | [几何建图与导航步骤](docs/启动指南.md#3-几何建图与定位导航) |
+| 在已有建图 / 定位系统上附加语义节点 | [附加语义建图步骤](docs/启动指南.md#5-附加语义建图与独立检测) |
+| ROS 键盘遥控 | `ros2 run car_bringup keyboard_teleop`，需要可控底盘节点；W/S、A/D、Q/E、空格停止 |
+| 安装 TF 预览 | `/usr/bin/python3 tools/preview_lidar_camera_tf.py --whole-vehicle --rviz` |
+| 蓝牙底盘工具 | [工具说明](tools/bluetooth_chassis_control.md) |
+| OA / GRIL / IMU 标定 | [标定启动与环境要求](docs/启动指南.md#7-标定与辅助工具) |
+
+## 使用边界
+
+- 本副本中的地图、构建产物、虚拟环境、日志和嵌套 Git 元数据已清理；模型和第三方源码仍在，运行依赖需要重建。
+- 源码仍有原机器的模型路径、相机序列号和串口默认值，示例通过参数覆盖；部分传统定位入口还固定读取旧目录，详见启动指南。
+- 检测位置是物体可见表面附近的估计点。Nav2 报告到达不等于已经通过实时图像重新确认物体仍在那里。
+- 回环后的历史语义点重投影、对象搬动后的失效处理、到达后视觉复核和统一语义地图保存入口仍待完善。
+- 文档中的命令依据当前源码整理；新机器依赖安装、地图包恢复和真实行驶需在实际环境中验证。

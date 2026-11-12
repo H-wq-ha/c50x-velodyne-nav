@@ -2,9 +2,9 @@
 build/
 install/
 log/
+output/
 
-# ===== 文档（不入库）=====
-docs/
+# 项目约定、记忆及 docs/ 文档应随源码备份或入库。
 
 # ===== 地图数据（仅保留目录结构，地图文件不入库）=====
 maps/*
@@ -12,6 +12,7 @@ maps/*
 
 # ===== Python =====
 __pycache__/
+.pytest_cache/
 *.pyc
 
 # ===== AI 工具本地状态 =====
@@ -23,3 +24,10 @@ __pycache__/
 .vscode/
 .idea/
 *.swp
+/arm_car.code-workspace
+
+# ===== 本机数据（保留在本地，不上传）=====
+# 设备序列号、时间同步和个人传感器标定结果
+/tool/calibration/*.json
+# 含本机绝对路径和运行态记录的历史快照
+/docs/语义导航架构核对快照_20261031.json

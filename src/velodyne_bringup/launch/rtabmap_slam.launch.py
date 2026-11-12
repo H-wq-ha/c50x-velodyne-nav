@@ -3,9 +3,10 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -25,6 +26,7 @@ def generate_launch_description():
         output='both',
         parameters=[os.path.join(pkg_velodyne_driver, 'config',
                                  'VLP16-velodyne_driver_node-params.yaml'),
+                    os.path.join(pkg_dir, 'config', 'velodyne_hardware_time.yaml'),
                     {'timestamp_first_packet': True}],
     )
 
@@ -40,13 +42,18 @@ def generate_launch_description():
                      'min_range': 0.5}],
     )
 
-    # ========== 静态 TF：base_link → velodyne ==========
+    # ========== 静态 TF：imu_link → velodyne ==========
 
     static_tf = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_tf_base_to_velodyne',
-        arguments=['0', '0', '0.3', '0', '0.0873', '0', 'base_link', 'velodyne'],
+        name='static_tf_imu_to_velodyne',
+        # 雷达原点在 IMU 坐标系中的位置（m）；X/Y 反向、Z 同向，绕 Z 旋转 pi。
+        arguments=[
+            '--x', '-0.0718', '--y', '0.006', '--z', '1.0345',
+            '--roll', '0', '--pitch', '0', '--yaw', '3.141592653589793',
+            '--frame-id', 'imu_link', '--child-frame-id', 'velodyne',
+        ],
     )
 
     # ========== WHEELTEC 底盘驱动 ==========
@@ -97,6 +104,10 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(pkg_dir, 'launch', 'lidar3d.launch.py')),
         launch_arguments={
+            'localization': LaunchConfiguration('localization'),
+            'database_path': LaunchConfiguration('database_path'),
+            'delete_db': LaunchConfiguration('delete_db'),
+            'start_rtabmap_viz': LaunchConfiguration('start_rtabmap_viz'),
             'lidar_topic': '/velodyne_points',
             'frame_id': 'base_link',
             'deskewing': 'true',
@@ -107,6 +118,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('localization', default_value='false'),
+        DeclareLaunchArgument('database_path', default_value=''),
+        DeclareLaunchArgument(
+            'delete_db', default_value='true',
+            description='Delete RTAB-Map default database in mapping mode (unsafe).'),
+        DeclareLaunchArgument('start_rtabmap_viz', default_value='true'),
         velodyne_driver,
         velodyne_transform,
         static_tf,

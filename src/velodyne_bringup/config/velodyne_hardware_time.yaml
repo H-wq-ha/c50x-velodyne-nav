@@ -1,0 +1,7 @@
+# Applied AFTER the vendor VLP16 configuration by every LiDAR launch entry.
+# Use the driver's default host receive timestamps for SLAM/navigation.
+# This does not require PPS/NMEA and shares the chassis IMU's host clock.
+velodyne_driver_node:
+  ros__parameters:
+    gps_time: false
+    time_offset: 0.0

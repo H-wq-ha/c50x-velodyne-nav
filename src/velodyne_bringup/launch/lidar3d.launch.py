@@ -23,6 +23,7 @@
 
 from launch import LaunchDescription, LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -51,6 +52,7 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
   localization = localization == 'true' or localization == 'True'
 
   database_path = LaunchConfiguration('database_path').perform(context)
+  delete_db = LaunchConfiguration('delete_db').perform(context).lower() == 'true'
   
   deskewing = LaunchConfiguration('deskewing').perform(context)
   deskewing = deskewing == 'true' or deskewing == 'True'
@@ -127,23 +129,26 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     'RGBD/AngularUpdate': '0.05',
     'RGBD/LinearUpdate': '0.05',
     'RGBD/CreateOccupancyGrid': 'true',
-    # 3D 八叉树地图（OctoMap）—— 最严格过滤配置
+    # 3D 八叉树地图（OctoMap）；有订阅者时发布八叉图话题
+    'octomap_tree_depth': 16,
+    'latch': True,
     'Grid/3D': 'true',
     'Grid/CellSize': '0.05',            # 提高地图分辨率，保留更细小结构
     'Grid/RangeMin': '0.5',             # 截断 0.5m 内车体反射
-    'Grid/RangeMax': '5.0',             # 截断 5m 外弧形假障碍（关键！）
-    'Grid/NormalsSegmentation': 'true',
-    'Grid/NormalK': '30',               # 法向量计算更多邻居，更平滑
+    'Grid/RangeMax': '10.0',            # 地图生成使用 0.5–10m 的点
+    'Grid/NormalsSegmentation': 'false', # 按高度阈值区分地面与障碍物
+    'Grid/MaxGroundHeight': '0.10',       # base_link 坐标系中，Z > 0.10m 的点归为障碍物
+    'Grid/NormalK': '30',               # 仅法向量分割开启时生效
     'Grid/GroundIsObstacle': 'false',
-    'Grid/MaxGroundAngle': '15',         # 更严格的地面角度判定
-    'Grid/FlatObstacleDetected': 'true',
-    'Grid/MaxObstacleHeight': '0.8',     # 降低障碍物高度上限
+    'Grid/MaxGroundAngle': '15',         # 仅法向量分割开启时生效
+    'Grid/FlatObstacleDetected': 'true', # 仅法向量分割开启时生效
+    'Grid/MaxObstacleHeight': '2.0',     # 栅格生成排除 base_link 坐标系中 Z > 2.0m 的点
     'Grid/PreVoxelFiltering': 'true',
-    'Grid/ClusterRadius': '0.2',         # 增大簇半径
+    'Grid/ClusterRadius': '0.2',         # 仅法向量分割开启时生效
     # 强噪声过滤（第二层：剔除稀疏弧线点）
     'Grid/NoiseFilteringRadius': '0.3',
     'Grid/NoiseFilteringMinNeighbors': '8',
-    'Grid/MinClusterSize': '40',         # 保留更多小障碍物簇
+    'Grid/MinClusterSize': '40',         # 仅法向量分割开启时生效
     'Grid/RayTracing': 'true',           # 射线追踪清除自由空间（关键！）
     'Grid/OctoMapOccupancyThr': '0.6',   # 提高占据阈值，减少虚警
     # 全局地图后处理（第三层）
@@ -162,9 +167,15 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     if database_path:
       rtabmap_parameters['database_path'] = database_path
   else:
-    arguments.append('-d') # This will delete the previous database (~/.ros/rtabmap.db)
+    if delete_db:
+      arguments.append('-d') # RTAB-Map deletes its default database when this is enabled.
+    elif database_path:
+      rtabmap_parameters['database_path'] = database_path
   
   remappings = [('scan', 'scan_not_used')]
+  rtabmap_map_topic = LaunchConfiguration('rtabmap_map_topic').perform(context)
+  if rtabmap_map_topic:
+    remappings.append(('map', rtabmap_map_topic))
   if imu_used:
     remappings.append(('imu', LaunchConfiguration('imu_topic')))
   else:
@@ -192,7 +203,8 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     Node(
       package='rtabmap_viz', executable='rtabmap_viz', output='screen',
       parameters=[shared_parameters, rtabmap_parameters],
-      remappings=remappings + [('scan_cloud', 'odom_filtered_input_scan')])
+      remappings=remappings + [('scan_cloud', 'odom_filtered_input_scan')],
+      condition=IfCondition(LaunchConfiguration('start_rtabmap_viz')))
   ]
   
   if fixed_frame_from_imu:
@@ -251,8 +263,20 @@ def generate_launch_description():
       description='Localization mode.'),
 
     DeclareLaunchArgument(
+      'rtabmap_map_topic', default_value='',
+      description='Optional output map topic override (for a separate static-map authority).'),
+
+    DeclareLaunchArgument(
       'database_path', default_value='',
       description='RTAB-Map database path used in localization mode.'),
+
+    DeclareLaunchArgument(
+      'delete_db', default_value='true',
+      description='Delete RTAB-Map default database when mapping (unsafe; disable when a database_path is set).'),
+
+    DeclareLaunchArgument(
+      'start_rtabmap_viz', default_value='true',
+      description='Start RTAB-Map visualization window.'),
 
     DeclareLaunchArgument(
       'lidar_topic', default_value='/velodyne_points',

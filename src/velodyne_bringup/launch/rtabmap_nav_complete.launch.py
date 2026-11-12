@@ -7,8 +7,8 @@
 
 本 launch 文件:
   - 启动 VLP-16 驱动 + WHEELTEC 底盘 + IMU 滤波
-  - 启动 RTAB-Map 定位模式 (使用 maps/rtabmap_nav2_latest.db)
-  - 启动 Nav2 导航 (使用 maps/rtabmap_nav2_latest.yaml)
+  - 启动 RTAB-Map 定位模式 (使用 maps/latest/rtabmap.db)
+  - 启动 Nav2 导航 (使用 maps/latest.yaml)
   - 启动 RViz2 (Nav2 面板 + 2D Pose Estimate / Nav2 Goal)
 """
 
@@ -25,11 +25,11 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('velodyne_bringup')
 
     # ========== 默认地图 ==========
-    # 由 save_rtabmap_map.sh 维护的最新 Nav2 静态地图文件
+    # 固定使用 maps/latest 导出的 Nav2 静态地图
     default_map = os.path.join(
         os.path.expanduser('~'),
         'arm_car', 'lidar', 'maps',
-        'rtabmap_nav2_latest.yaml')
+        'latest.yaml')
 
     # ========== DeclareLaunchArgument(s) ==========
     # 注意: 直接在顶层用 LaunchConfiguration 变量,

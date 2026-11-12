@@ -23,7 +23,7 @@ def generate_launch_description():
         'arm_car',
         'lidar',
         'maps',
-        'rtabmap_nav2_latest.yaml')
+        'latest.yaml')
 
     params_file = LaunchConfiguration('params_file')
     map_file = LaunchConfiguration('map')

@@ -1,0 +1,28 @@
+semantic_mapping:
+  ros__parameters:
+    color_topic: /camera/camera/color/image_raw
+    depth_topic: /camera/camera/aligned_depth_to_color/image_raw
+    camera_info_topic: /camera/camera/color/camera_info
+    model_path: /home/y/arm_car/lidar/yolov8_d435i/models/yolov8n_256.onnx
+    target_class_ids: [63, 39, 41]
+    map_frame: map
+    odom_frame: odom
+    map_id: semantic_run
+    db_path: /home/y/.ros/semantic_mapping/runs/semantic_run/semantic.sqlite3
+    inference_hz: 2.0
+    confidence_threshold: 0.35
+    iou_threshold: 0.45
+    depth_min_m: 0.15
+    depth_max_m: 6.0
+    depth_window_px: 5
+    confirmations: 3
+    association_gate_m: 0.35
+    sync_slop_s: 0.02
+    ort_threads: 2
+    max_frame_age_s: 2.0
+    pending_queue_size: 60
+    min_valid_depth_samples: 5
+    depth_min_valid_ratio: 0.4
+    map_jump_translation_m: 0.75
+    map_jump_rotation_deg: 25.0
+    use_sim_time: false

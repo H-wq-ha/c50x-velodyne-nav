@@ -1,0 +1,27 @@
+# 每轮录包路径和起止时间由 calibrate.py 自动填写。
+topic_lidar: /calibration/velodyne_points
+topic_imu: /calibration/imu
+LidarModel: VLP_16_points
+vlp16_ring_case: 0
+scan4map: 15.0
+ndtResolution: 0.5
+ndt_key_frame_downsample: 0.1
+map_downsample_size: 0.25
+knot_distance: 0.05
+use_gui: false
+segment_num: 1
+selected_segment: []
+plane_motion: false
+gyro_weight: 2.80
+accel_weight: 1.85
+lidar_weight: 1.0
+lock_accel_bias: false
+opt_timeoffset: true
+timeoffset_padding: 0.15
+opt_lidar_intrinsic: false
+opt_IMU_intrinsic: false
+iteration_num: 5
+extrinsic:
+  Trans: [0.0, 0.0, 0.25]
+  Trans_prior: [0.0, 0.0, 0.25]
+  Rot: [1, 0, 0, 0, 1, 0, 0, 0, 1]

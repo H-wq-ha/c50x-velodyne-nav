@@ -92,11 +92,11 @@ controller_server:
       debug_trajectory_details: false
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.2
+      max_vel_x: 0.5
       max_vel_y: 0.0
-      max_vel_theta: 0.2
+      max_vel_theta: 0.5
       min_speed_xy: 0.0
-      max_speed_xy: 0.2
+      max_speed_xy: 0.5
       min_speed_theta: 0.0
       acc_lim_x: 0.3
       acc_lim_y: 0.0
@@ -172,7 +172,7 @@ local_costmap:
 
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.55
+        inflation_radius: 0.40
         cost_scaling_factor: 3.0
 
       always_send_full_costmap: true
@@ -198,7 +198,7 @@ global_costmap:
 
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.6
+        inflation_radius: 0.40
         cost_scaling_factor: 3.0
 
       always_send_full_costmap: true
@@ -248,7 +248,7 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 1.0
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.2
+    max_rotational_vel: 0.5
     min_rotational_vel: 0.05
     rotational_acc_lim: 0.4
     behavior_plugins: [spin, backup, drive_on_heading, wait]
@@ -282,8 +282,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.2, 0.0, 0.2]
-    min_velocity: [-0.2, 0.0, -0.2]
+    max_velocity: [0.5, 0.0, 0.5]
+    min_velocity: [-0.5, 0.0, -0.5]
     max_accel: [0.3, 0.0, 0.4]
     max_decel: [-0.3, 0.0, -0.4]
     odom_topic: /odom

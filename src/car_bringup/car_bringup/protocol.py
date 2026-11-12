@@ -112,12 +112,12 @@ def stop_robot(ser: serial.Serial):
     send_speed(ser, 0, 0, 0)
 
 
-def open_serial(port: str, baudrate: int = BAUDRATE) -> serial.Serial:
-    """打开串口"""
+def open_serial(port: str, baudrate: int = BAUDRATE, *, exclusive: bool = False) -> serial.Serial:
+    """打开串口；exclusive 用于确保只读传感器进程独占设备。"""
     return serial.Serial(
         port=port, baudrate=baudrate,
         bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE, timeout=0.1,
+        stopbits=serial.STOPBITS_ONE, timeout=0.1, exclusive=exclusive,
     )
 
 

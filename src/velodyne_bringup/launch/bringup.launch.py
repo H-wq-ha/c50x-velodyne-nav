@@ -6,6 +6,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    pkg_dir = FindPackageShare('velodyne_bringup').find('velodyne_bringup')
     pkg_velodyne_driver = FindPackageShare('velodyne_driver').find(
         'velodyne_driver')
     pkg_velodyne_pointcloud = FindPackageShare('velodyne_pointcloud').find(
@@ -21,7 +22,9 @@ def generate_launch_description():
             name='velodyne_driver_node',
             output='screen',
             parameters=[os.path.join(pkg_velodyne_driver, 'config',
-                                     'VLP16-velodyne_driver_node-params.yaml')]
+                                     'VLP16-velodyne_driver_node-params.yaml'),
+                        os.path.join(pkg_dir, 'config',
+                                     'velodyne_hardware_time.yaml')]
         ),
 
         Node(
@@ -37,8 +40,8 @@ def generate_launch_description():
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['--x', '0', '--y', '0', '--z', '0.3',
-                       '--roll', '0', '--pitch', '0.0873', '--yaw', '0',
+            arguments=['--x', '0', '--y', '0', '--z', '1.45',
+                       '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link', '--child-frame-id', 'velodyne']
         )
     ])

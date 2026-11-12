@@ -1,0 +1,34 @@
+digraph G {
+ graph [rankdir=TB, bgcolor="#ffffff", pad="0.35", nodesep="0.38", ranksep="0.52", splines=polyline, fontname="Noto Sans CJK SC", label="语义建图：几何定位与物体记忆", labelloc=t, fontsize=24];
+ node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=15, margin="0.18,0.13", color="#cbd5e1", fillcolor="#f8fafc", fontcolor="#18324b"];
+ edge [fontname="Noto Sans CJK SC", fontsize=11, color="#64748b", arrowsize=0.75, fontcolor="#475569"];
+ subgraph cluster_geo {
+ label="几何链：机器人在哪里，环境长什么样"; fontsize=16; color="#cbd5e1"; style=rounded;
+ lidar [label="激光雷达\n三维点云"];
+ imu [label="IMU\nMadgwick 姿态滤波"];
+ deskew [label="点云去畸变\n过滤与体素降采样"];
+ icp [label="ICP 点云配准\n局部里程计"];
+ slam [label="RTAB-Map\n回环检测与位姿图优化", fillcolor="#e7f0fc"];
+ geomap [label="几何地图\n占据栅格 · SLAM 数据库"];
+ lidar -> deskew; imu -> deskew; deskew -> icp; icp -> slam; deskew -> slam; slam -> geomap;
+ }
+ subgraph cluster_sem {
+ label="语义链：物体是什么，在地图哪里"; fontsize=16; color="#cbd5e1"; style=rounded;
+ rgbd [label="RGB-D 相机\n彩色图 · 对齐深度 · 内参"];
+ sync [label="彩色 / 深度时间配对\n最新有效帧选择"];
+ yolo [label="YOLOv8 检测 + NMS\n类别与二维检测框"];
+ depth [label="局部深度中值 + MAD\n反投影为相机三维点"];
+ tf [label="采集时刻 TF 坐标变换\n相机点 → 地图点", fillcolor="#e7f0fc"];
+ fusion [label="同类三维最近邻关联\n门限筛选 · 等权融合 · 多次确认"];
+ db [label="SQLite 物体记忆\n类别 · 编号 · 位置 · 次数 · 时间"];
+ rgbd -> sync -> yolo -> depth -> tf -> fusion -> db;
+ }
+ slam -> tf [label="全局定位变换", constraint=false];
+ icp -> tf [label="局部位姿", constraint=false];
+ extr [label="相机安装外参\n坐标系与时间约定", fillcolor="#fff5df"];
+ extr -> tf;
+ bundle [label="配套地图包\n几何地图 + 语义库 + 地图身份", fillcolor="#e5f3ec", color="#94bfa7"];
+ geomap -> bundle; db -> bundle;
+ consumer [label="供语义查询与物体接近导航使用"];
+ bundle -> consumer;
+}

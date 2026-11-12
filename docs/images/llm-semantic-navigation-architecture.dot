@@ -1,0 +1,39 @@
+digraph G {
+ graph [rankdir=TB, bgcolor="#ffffff", pad="0.35", nodesep="0.38", ranksep="0.45", splines=polyline, fontname="Noto Sans CJK SC", label="LLM 语义导航：从语言到执行反馈", labelloc=t, fontsize=23];
+ node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=14, margin="0.18,0.12", color="#cbd5e1", fillcolor="#f8fafc", fontcolor="#18324b"];
+ edge [fontname="Noto Sans CJK SC", fontsize=11, color="#64748b", arrowsize=0.75, fontcolor="#475569"];
+ user [label="用户自然语言\n查询位置 / 询问可达 / 请求前往"];
+ llm [label="ROSA + LLM\n理解意图 · 从真实目录选择对象", fillcolor="#e7f0fc"];
+ context [label="上下文查询工具\n物体库 · 地图身份 · 新鲜定位"];
+ preview [label="只读预检工具\n不启动机器人运动", fillcolor="#fff5df"];
+ start [label="导航启动工具\n服务端校验 · 建立任务", fillcolor="#e5f3ec"];
+ approach [label="接近位姿规划\n环形采样 → 占地检查 → 相机视场筛选"];
+ planner [label="Nav2 路径检查\nNavFn / Dijkstra → 复检路径终点"];
+ outcome [label="预检结果\n有路 / 无合格路径 / 未知", fillcolor="#fff5df"];
+ goal [label="NavigateToPose\n提交停靠位姿，执行时重新规划", fillcolor="#e5f3ec"];
+ nav [label="Nav2 行为树 + MPPI\n路径跟踪 · 重规划 · 局部避障"];
+ sensors [label="实时定位与雷达点云\n局部代价地图"];
+ chassis [label="速度平滑 → 底盘执行"];
+ state [label="任务状态与取消接口\n区分受理、执行、终态与未知", fillcolor="#e7f0fc"];
+ response [label="客户端 / LLM 汇总并反馈给用户\n预检有路 ≠ 到达；到达位姿 ≠ 视觉确认"];
+ user -> llm;
+ llm -> context [dir=both, label="查询与返回"];
+ llm -> preview [label="能否靠近？"];
+ llm -> start [label="请前往"];
+ preview -> approach; start -> approach;
+ approach -> planner;
+ planner -> outcome [label="只读分支"];
+ planner -> goal [label="执行分支"];
+ goal -> nav;
+ sensors -> nav;
+ nav -> chassis;
+ nav -> state [label="状态反馈"];
+ chassis -> state [style=invis];
+ outcome -> response [style=dashed];
+ state -> response [style=dashed];
+ {rank=same; llm; context;}
+ {rank=same; preview; start;}
+ {rank=same; outcome; goal;}
+ {rank=same; sensors; nav;}
+ {rank=same; chassis; state;}
+}

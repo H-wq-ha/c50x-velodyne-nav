@@ -5,6 +5,7 @@ WHEELTEC C50X 底盘 ROS2 驱动节点
 读取串口状态帧 → 发布 /chassis_vel /imu_raw /battery
 """
 import time
+import math
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -18,13 +19,31 @@ from .protocol import (
 )
 
 
+def rotate_planar_velocity(vx: float, vy: float, yaw: float):
+    """Rotate a planar velocity vector by yaw radians."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    return c*vx - s*vy, s*vx + c*vy
+
+
 class ChassisNode(Node):
-    def __init__(self):
-        super().__init__('chassis_node')
+    def __init__(self, *, parameter_overrides=None):
+        super().__init__('chassis_node', parameter_overrides=parameter_overrides)
 
         # ---- 参数 ----
         self.declare_parameter('port', 'auto')
         self.declare_parameter('baudrate', 460800)
+        # Legacy chassis launches keep control enabled. Sensor-only launches
+        # can disable the /cmd_vel subscription and every serial write.
+        self.declare_parameter('enable_control', True)
+        self.declare_parameter('chassis_yaw_offset', 0.0)
+        # This is the chassis/IMU child-frame yaw in logical base_link,
+        # matching the base_link -> imu_link static transform.
+        self._chassis_yaw_offset = float(self.get_parameter('chassis_yaw_offset').value)
+        if not math.isfinite(self._chassis_yaw_offset):
+            raise ValueError('chassis_yaw_offset must be finite')
+        self._control_enabled = self.get_parameter('enable_control').value
+        if not isinstance(self._control_enabled, bool):
+            raise TypeError('enable_control must be a boolean')
 
         # ---- 串口 ----
         self._serial = None
@@ -38,13 +57,19 @@ class ChassisNode(Node):
         self._bat_pub = self.create_publisher(Float32, '/battery', 10)
 
         # ---- 订阅器 ----
-        self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_cb, 10)
+        self._control_sub = None
+        if self._control_enabled:
+            self._control_sub = self.create_subscription(
+                Twist, '/cmd_vel', self._cmd_vel_cb, 10)
 
         # ---- 定时器: 200Hz 读取状态帧 ----
         self.create_timer(0.005, self._read_status)
 
         self._open_port()
-        self.get_logger().info('底盘节点已启动，等待 /cmd_vel 指令...')
+        if self._control_enabled:
+            self.get_logger().info('底盘节点已启动，等待 /cmd_vel 指令...')
+        else:
+            self.get_logger().info('只读 IMU 传感器节点已启动，串口仅接收状态帧；底盘控制已禁用。')
 
     # ==================== 串口管理 ====================
 
@@ -62,7 +87,8 @@ class ChassisNode(Node):
                 return False
             self.get_logger().info(f'自动检测到串口: {port}')
         try:
-            self._serial = open_serial(port, baud)
+            self._serial = open_serial(
+                port, baud, exclusive=not self._control_enabled)
             self.get_logger().info(f'串口已连接 {port} @ {baud} baud')
             return True
         except Exception as e:
@@ -90,11 +116,15 @@ class ChassisNode(Node):
 
     def _cmd_vel_cb(self, msg: Twist):
         """收到 /cmd_vel → 发串口"""
+        if not self._control_enabled:
+            return
         if not self._serial or not self._serial.is_open:
             return
         try:
-            # linear.z 作为角速度
-            send_speed(self._serial, msg.linear.x, msg.linear.y, msg.angular.z)
+            # Child-frame coordinates are the inverse of the base->IMU TF rotation.
+            vx, vy = rotate_planar_velocity(
+                msg.linear.x, msg.linear.y, -self._chassis_yaw_offset)
+            send_speed(self._serial, vx, vy, msg.angular.z)
         except Exception as e:
             self.get_logger().error(f'发送控制帧失败: {e}')
 
@@ -138,9 +168,12 @@ class ChassisNode(Node):
         """根据 RobotStatus 发布三个话题"""
 
         # ---- /chassis_vel (geometry_msgs/Twist) ----
+        # Firmware reports child-frame velocity; rotate it into logical base_link.
+        vel_x, vel_y = rotate_planar_velocity(
+            s.vel_x, s.vel_y, self._chassis_yaw_offset)
         twist = Twist()
-        twist.linear.x = s.vel_x
-        twist.linear.y = s.vel_y
+        twist.linear.x = vel_x
+        twist.linear.y = vel_y
         twist.angular.z = s.vel_z
         self._vel_pub.publish(twist)
 
@@ -182,10 +215,11 @@ class ChassisNode(Node):
 
     def destroy_node(self):
         if self._serial and self._serial.is_open:
-            try:
-                stop_robot(self._serial)
-            except Exception:
-                pass
+            if self._control_enabled:
+                try:
+                    stop_robot(self._serial)
+                except Exception:
+                    pass
             self._serial.close()
             self.get_logger().info('串口已关闭')
         super().destroy_node()
