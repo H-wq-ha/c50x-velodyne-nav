@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>piper_grasp</name>
+  <version>0.1.0</version>
+  <description>Vision-guided PiPER arm planning and execution with gripper length offset.</description>
+  <maintainer email="y@todo.todo">y</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>piper_vision</exec_depend>
+  <exec_depend>piper</exec_depend>
+  <exec_depend>piper_with_gripper_moveit</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

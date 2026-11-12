@@ -1,0 +1,27 @@
+lift_servo Python 串口测试工具
+=============================
+
+依赖：Python 3.10+、pyserial。串口参数默认与固件一致：115200、8N1。
+
+常用命令：
+
+    python3 test/lift_servo_serial.py ports
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 ping
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 status
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 move FWD 10 10
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 move REV 10 10
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 stop
+    python3 test/lift_servo_serial.py --port /dev/ttyACM0 shell
+
+如果系统只检测到一个USB串口，可以省略 --port。连续运行命令示例：
+
+    python3 test/lift_servo_serial.py run FWD 500
+    python3 test/lift_servo_serial.py stop
+
+连续运行前建议先设置通信看门狗，并让上位机周期发送 KEEPALIVE：
+
+    python3 test/lift_servo_serial.py watchdog 1000
+
+运行不需要硬件的协议单元测试：
+
+    python3 -m unittest discover -s test -p 'test_*.py' -v

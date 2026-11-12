@@ -1,0 +1,19 @@
+#ifndef APP_CONFIG_H
+#define APP_CONFIG_H
+#include "stm32f1xx_hal.h"
+#define IMU_SCL_PORT GPIOB
+#define IMU_SDA_PORT GPIOB
+#define IMU_SCL_PIN GPIO_PIN_10
+#define IMU_SDA_PIN GPIO_PIN_11
+#define APP_UART_BAUD 460800U
+#define APP_IMU_RATE_HZ 200U
+#define APP_SOFT_I2C_HALF_PERIOD_US 2U
+#define APP_SOFT_I2C_HIGH_PERIOD_US 1U
+#define APP_SOFT_I2C_TIMEOUT_US 1000U
+#define APP_RETRY_PERIOD_MS 1000U
+#define APP_CAPTURE_QUEUE_LENGTH 8U
+#define APP_SAMPLE_QUEUE_LENGTH 8U
+#if APP_IMU_RATE_HZ < 1 || APP_IMU_RATE_HZ > 1000 || (1000 % APP_IMU_RATE_HZ) != 0
+#error "IMU rate must divide the DLPF-enabled 1kHz output rate"
+#endif
+#endif

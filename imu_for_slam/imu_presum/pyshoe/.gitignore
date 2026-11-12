@@ -1,0 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+*.DS_Store
+*.csv
+*.tar.gz
+*.tar
+*.pkl
+*.eps
+*.mat
+*.npy
+
+

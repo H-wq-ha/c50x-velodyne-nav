@@ -1,0 +1,66 @@
+R_cam2base:
+- - -0.010738624899900684
+  - -0.7607542619765303
+  - 0.6489511806136143
+- - -0.9991067238641486
+  - -0.018363225367554928
+  - -0.03805977251046022
+- - 0.04087097092933839
+  - -0.6487801976314052
+  - -0.759877502559885
+t_cam2base:
+- -0.03145602399057369
+- -0.17807481937083938
+- 0.4673689263689103
+T_cam2base:
+- - -0.010738624899900684
+  - -0.7607542619765303
+  - 0.6489511806136143
+  - -0.03145602399057369
+- - -0.9991067238641486
+  - -0.018363225367554928
+  - -0.03805977251046022
+  - -0.17807481937083938
+- - 0.04087097092933839
+  - -0.6487801976314052
+  - -0.759877502559885
+  - 0.4673689263689103
+- - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+T_target2gripper:
+- - 0.9825766116853514
+  - -0.1264993755102048
+  - -0.13616574519482633
+  - -0.10355235625483153
+- - -0.14167950962425602
+  - -0.03562141118342621
+  - -0.9892714650781814
+  - 0.0012729580137689127
+- - 0.12029180654377285
+  - 0.9913269002003475
+  - -0.052923134994122156
+  - 0.155971201168457
+- - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+mode: eye_to_hand
+method: opencv_shah
+translation_unit: m
+physical_acceptance: false
+backend:
+  library: OpenCV
+  version: 4.12.0
+  distribution: opencv-contrib-python
+  distribution_version: 4.12.0.88
+  upstream_source: https://github.com/opencv/opencv/blob/4.12.0/modules/calib3d/src/calibration_handeye.cpp
+  license: Apache-2.0
+  custom_handeye_solver: false
+  binary_sha256_note: Python distribution pinned in requirements.txt; formulas are
+    not reimplemented.
+  api: cv2.calibrateRobotWorldHandEye
+  method_constant: CALIB_ROBOT_WORLD_HAND_EYE_SHAH
+  method_value: 0
+  coordinate_adapter: world2cam=C, base2gripper=S; native U=inv(Y), V=inv(X)

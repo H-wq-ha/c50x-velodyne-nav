@@ -1,0 +1,5 @@
+# The stock file references /head_mount_kinect topics and the
+# DepthImageOctomapUpdater plugin, which is not installed here.
+# Vision-guided grasping does not use the MoveIt octomap, so keep the
+# sensor list empty to avoid startup errors.
+sensors: []

@@ -1,0 +1,73 @@
+R_cam2base:
+- - 0.005453956320545461
+  - -0.716152373878076
+  - 0.6979226545608403
+- - -0.9999542013271348
+  - -0.009394743702894885
+  - -0.0018259350945155628
+- - 0.007864452216527595
+  - -0.6978807320592493
+  - -0.7161708135715813
+t_cam2base:
+- -0.07313509500952083
+- 0.23497507078732854
+- 0.4442989305036534
+T_cam2base:
+- - 0.005453956320545461
+  - -0.716152373878076
+  - 0.6979226545608403
+  - -0.07313509500952083
+- - -0.9999542013271348
+  - -0.009394743702894885
+  - -0.0018259350945155628
+  - 0.23497507078732854
+- - 0.007864452216527595
+  - -0.6978807320592493
+  - -0.7161708135715813
+  - 0.4442989305036534
+- - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+T_target2gripper:
+- - 0.9987534512555706
+  - -0.01824074109588894
+  - -0.046463092550528745
+  - -0.11549459460498925
+- - -0.045225058085641805
+  - 0.0632507089623517
+  - -0.9969724379023273
+  - -0.001538470020422069
+- - 0.021124339663917857
+  - 0.997830959221066
+  - 0.06234692529492371
+  - 0.14274219482682152
+- - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+mode: eye_to_hand
+method: opencv_shah
+translation_unit: m
+physical_acceptance: false
+backend:
+  library: OpenCV
+  version: 4.12.0
+  distribution: opencv-contrib-python
+  distribution_version: 4.12.0.88
+  upstream_source: https://github.com/opencv/opencv/blob/4.12.0/modules/calib3d/src/calibration_handeye.cpp
+  license: Apache-2.0
+  custom_handeye_solver: false
+  binary_sha256_note: Python distribution pinned in requirements.txt; formulas are
+    not reimplemented.
+  api: cv2.calibrateRobotWorldHandEye
+  method_constant: CALIB_ROBOT_WORLD_HAND_EYE_SHAH
+  method_value: 0
+  coordinate_adapter: world2cam=C, base2gripper=S; native U=inv(Y), V=inv(X)
+calibrated_at: '2026-11-06T20:04:32.521370+08:00'
+intrinsics_file: calibration.yaml
+intrinsics_sha256: a8e3f67db1717d088b6c94ce541466a7424cc0ab08c1940d3e09e48506df7598
+training_frames: 50
+held_out_frames: 12
+selection_note: Selected Nov 6 Shah result by the lower held-out consistency metrics
+  observed in its own run; held-out groups differed across the two sessions.
